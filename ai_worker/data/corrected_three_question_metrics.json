@@ -1,0 +1,68 @@
+{
+  "q1": {
+    "features": [
+      "Server_Workload(%)",
+      "Inlet_Temperature(°C)",
+      "Outlet_Temperature(°C)",
+      "Ambient_Temperature(°C)",
+      "Temperature_Deviation(°C)"
+    ],
+    "split": 2797,
+    "metrics": {
+      "n": 700,
+      "mae": 1.7853443871833,
+      "rmse": 2.2183181558441003,
+      "r2": -0.006647830583756731
+    },
+    "coef_std": [
+      21.50193568488643,
+      -0.02684679835852075,
+      -0.015359477745791853,
+      0.042221532881916296,
+      0.05644443722691846,
+      -0.06421687090396866
+    ],
+    "actualMin": 15.21527462054078,
+    "actualMax": 27.15484432708474,
+    "predMin": 21.18655382192358,
+    "predMax": 21.65168406170874
+  },
+  "q2": {
+    "method": "derived_from_q1",
+    "threshold": 27,
+    "confusion": {
+      "tn": 699,
+      "fp": 0,
+      "fn": 1,
+      "tp": 0
+    },
+    "actualPos": 1,
+    "predPos": 0
+  },
+  "q3": {
+    "features": [
+      "Server_Workload(%)",
+      "Ambient_Temperature(°C)",
+      "Chiller_Usage(%)",
+      "AHU_Usage(%)"
+    ],
+    "split": 2798,
+    "metrics": {
+      "n": 700,
+      "mae": 0.002430729172872292,
+      "rmse": 0.0028319520732374035,
+      "r2": 0.9996886550205432
+    },
+    "coef_std": [
+      0.76088277340958,
+      0.000324489428455159,
+      0.00017624975196513584,
+      0.15670403296440347,
+      0.03210805510578784
+    ],
+    "actualMin": 0.35,
+    "actualMax": 1.09,
+    "predMin": 0.3531054997007065,
+    "predMax": 1.09102955859158
+  }
+}

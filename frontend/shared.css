@@ -1,0 +1,218 @@
+/* SensorGrid — shared domain stylesheet
+   All domain HTML files link to this. Override variables per domain. */
+
+:root {
+  --bg:       #0d0f14;
+  --surface:  #13161d;
+  --surface2: #1a1e28;
+  --border:   rgba(255,255,255,0.07);
+  --border2:  rgba(255,255,255,0.13);
+  --text:     #e8eaf0;
+  --muted:    #6b7280;
+  --dim:      #9ca3af;
+  --radius:   10px;
+  --accent:   #3b82f6;      /* overridden per domain */
+  --accent-a: rgba(59,130,246,0.12);
+  --font:     'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono:     'SF Mono', 'Fira Code', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  overflow-x: hidden;
+}
+
+/* ── TABS ── */
+.tabs-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: #0a0c10;
+  padding: 0 22px;
+  flex-shrink: 0;
+}
+.tab {
+  padding: 11px 18px;
+  font-size: 13px; font-weight: 500;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+  margin-bottom: -1px;
+}
+.tab:hover { color: var(--dim); }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+/* ── TAB PANELS ── */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── SCROLLABLE CONTENT ── */
+.content-scroll {
+  overflow-y: auto;
+  padding: 22px;
+  height: calc(100vh - 48px); /* subtract tabs-bar height */
+}
+.content-scroll::-webkit-scrollbar { width: 4px; }
+.content-scroll::-webkit-scrollbar-track { background: transparent; }
+.content-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+/* ── KPI ROW ── */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 13px;
+  margin-bottom: 18px;
+}
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 15px 17px;
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--kpi-color, var(--accent));
+}
+.kpi-label {
+  font-size: 10px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.8px;
+  margin-bottom: 7px;
+}
+.kpi-value {
+  font-size: 25px; font-weight: 600;
+  letter-spacing: -0.8px; color: var(--text); line-height: 1;
+}
+.kpi-unit { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 2px; }
+.kpi-delta { font-size: 11px; margin-top: 5px; color: var(--muted); }
+.kpi-delta.up   { color: #10b981; }
+.kpi-delta.down { color: #ef4444; }
+
+/* ── CARD ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 17px;
+}
+.card-title { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 3px; }
+.card-sub   { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+
+/* ── GRID LAYOUTS ── */
+.grid-2   { display: grid; grid-template-columns: 1fr 1fr;  gap: 14px; margin-bottom: 14px; }
+.grid-3   { display: grid; grid-template-columns: 2fr 1fr;  gap: 14px; margin-bottom: 14px; }
+.grid-full { display: grid; grid-template-columns: 1fr;     gap: 14px; margin-bottom: 14px; }
+.col-full  { grid-column: 1 / -1; }
+
+/* ── CHART WRAPPER ── */
+.chart-wrap         { position: relative; height: 200px; }
+.chart-wrap.tall    { height: 260px; }
+.chart-wrap.short   { height: 150px; }
+
+/* ── MINI LEGEND ── */
+.mini-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+.legend-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+/* ── ALERT FEED ── */
+.alert-feed { display: flex; flex-direction: column; gap: 8px; }
+.alert-item {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 9px 13px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+.alert-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; }
+.alert-msg  { font-size: 12px; color: var(--dim); line-height: 1.5; }
+.alert-time { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.alert-crit .alert-dot { background: #ef4444; box-shadow: 0 0 6px rgba(239,68,68,0.4); }
+.alert-warn .alert-dot { background: #f59e0b; }
+.alert-ok   .alert-dot { background: #10b981; }
+
+/* ── SENSOR GRID (heat map) ── */
+.sensor-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 5px;
+  margin-top: 8px;
+}
+.sensor-node {
+  aspect-ratio: 1;
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s;
+  color: rgba(0,0,0,0.65);
+}
+.sensor-node:hover { transform: scale(1.2); z-index: 2; position: relative; }
+
+/* ── RAW DATA STREAM (green screen) ── */
+.raw-wrap {
+  display: flex; flex-direction: column;
+  height: calc(100vh - 48px);
+  background: #000;
+  font-family: var(--mono);
+}
+.raw-toolbar {
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px 16px;
+  background: #050f05;
+  border-bottom: 1px solid #0f3a0f;
+  flex-shrink: 0;
+}
+.raw-badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 3px; font-weight: 700;
+  background: #0f3a0f; color: #4ade80; font-family: var(--mono); letter-spacing: 0.5px;
+}
+.raw-filter {
+  padding: 4px 10px; border-radius: 4px;
+  border: 1px solid #1a5c1a;
+  background: #060e06; color: #4ade80;
+  font-family: var(--mono); font-size: 11px; outline: none;
+}
+.raw-filter:focus { border-color: #22c55e; }
+.raw-label { font-size: 11px; color: #22c55e; letter-spacing: 1px; text-transform: uppercase; }
+.raw-stream {
+  flex: 1; overflow-y: auto; padding: 11px 16px;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.raw-stream::-webkit-scrollbar { width: 4px; }
+.raw-stream::-webkit-scrollbar-track { background: #000; }
+.raw-stream::-webkit-scrollbar-thumb { background: #1a5c1a; }
+.raw-row {
+  font-size: 11px; line-height: 1.7; color: #16a34a;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  animation: fadeIn 0.25s ease;
+}
+@keyframes fadeIn { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:none; } }
+.raw-row .ts   { color: #166534; }
+.raw-row .sid  { color: #4ade80; font-weight: 700; }
+.raw-row .key  { color: #22c55e; }
+.raw-row .val  { color: #86efac; }
+.raw-row .sep  { color: #166534; }
+.raw-row .crit { color: #f87171; font-weight: 700; }
+.raw-row .warn { color: #facc15; }
+.raw-cursor {
+  display: inline-block; width: 7px; height: 13px;
+  background: #22c55e; vertical-align: middle; margin-left: 2px;
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+.raw-footer {
+  display: flex; gap: 22px; padding: 7px 16px;
+  background: #050f05; border-top: 1px solid #0f3a0f; flex-shrink: 0;
+}
+.raw-stat { font-size: 10px; color: #166534; letter-spacing: 0.4px; }
+.raw-stat span { color: #4ade80; }
+
+/* ── CHART.JS DEFAULT TOOLTIP FIX ── */
+/* (handled in JS options per domain) */

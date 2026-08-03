@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# Runtime CSVs are reproducible outputs. Curated training data lives in ai_worker/data/.
+backend/generated_runs/
