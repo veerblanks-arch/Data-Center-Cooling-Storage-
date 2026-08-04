@@ -55,6 +55,22 @@ class EventReader:
                 )
                 return [self.event(row) for row in cursor.fetchall()]
 
+    def read_history(self, limit=50000):
+        """Return a bounded chronological snapshot for Analytics calculations."""
+        with psycopg2.connect(self.dsn) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """SELECT id,event_id,device_id,event_timestamp,schema_version,scenario,
+                    severity,failure_point,sensor_status,data_quality,scenario_details,
+                    server_workload_pct,inlet_temperature_c,outlet_temperature_c,
+                    ambient_temperature_c,cooling_power_kw,chiller_usage_pct,ahu_usage_pct,
+                    total_energy_cost_usd,temperature_deviation_c,cooling_strategy_action,
+                    cooling_strategy_code,is_outlier FROM cooling_events
+                    ORDER BY id DESC LIMIT %s""",
+                    (limit,),
+                )
+                return list(reversed([self.event(row) for row in cursor.fetchall()]))
+
     def current_id(self):
         with psycopg2.connect(self.dsn) as connection:
             with connection.cursor() as cursor:
@@ -77,7 +93,19 @@ class BridgeHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
-        if self.path.split("?", 1)[0] != "/api/events":
+        route = self.path.split("?", 1)[0]
+        if route == "/api/events/history":
+            try:
+                payload = json.dumps({"events": self.reader.read_history()}, separators=(",", ":"), default=json_value)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload.encode())))
+                self.end_headers()
+                self.wfile.write(payload.encode())
+            except (psycopg2.Error, OSError) as error:
+                self.send_error(503, f"Database history is unavailable: {error}")
+            return
+        if route != "/api/events":
             return super().do_GET()
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
