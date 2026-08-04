@@ -86,6 +86,13 @@
   let currentImport = null;
   let backendSource = null;
   let backendConnected = false;
+  // Analytics always derives from this one canonical event collection. It is
+  // populated from PostgreSQL when the bridge is available or replaced by a
+  // validated CSV import; every Analytics component then receives the same
+  // date-filtered subset.
+  let analyticsEvents = null;
+  let analyticsMode = "snapshot";
+  let analyticsRefreshTimer = null;
 
   const streamState = {
     generated: 0,
@@ -306,6 +313,31 @@
     return first === last ? formatDate(first, options) : `${formatDate(first, options)}–${formatDate(last, options)}`;
   }
 
+  function dateTimeLocalToMilliseconds(value, includeWholeMinute) {
+    if (!value) return null;
+    const milliseconds = new Date(value).getTime();
+    if (!Number.isFinite(milliseconds)) return null;
+    return includeWholeMinute ? milliseconds + 59999 : milliseconds;
+  }
+
+  function selectedTimeRange() {
+    const start = dateTimeLocalToMilliseconds(byId("rangeStart").value, false);
+    const end = dateTimeLocalToMilliseconds(byId("rangeEnd").value, true);
+    if (start !== null && end !== null && start > end) {
+      return { error: "The From time must be before the To time.", start, end };
+    }
+    return { start, end, error: null };
+  }
+
+  function filterEventsByTime(events) {
+    const range = selectedTimeRange();
+    if (range.error) return { events: [], ...range };
+    return {
+      events: events.filter((event) => (range.start === null || event.sort_ms >= range.start) && (range.end === null || event.sort_ms <= range.end)),
+      ...range,
+    };
+  }
+
   function formatCompactTime(milliseconds) {
     return formatDate(milliseconds, { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
   }
@@ -408,6 +440,57 @@
     })).sort((left, right) => right.events - left.events);
   }
 
+  function eventFromBackend(event, sourceIndex) {
+    const sortMs = Date.parse(event.timestamp);
+    if (!Number.isFinite(sortMs)) return null;
+    return {
+      ...event,
+      source_index: sourceIndex,
+      sort_ms: sortMs,
+      timestamp: new Date(sortMs).toISOString(),
+      event_id: event.event_id || `backend-row-${event._db_id || sourceIndex}`,
+      server_workload_pct: Number(event.server_workload_pct),
+      inlet_temperature_c: Number(event.inlet_temperature_c),
+      outlet_temperature_c: Number(event.outlet_temperature_c),
+      ambient_temperature_c: Number(event.ambient_temperature_c),
+      cooling_power_kw: Number(event.cooling_power_kw),
+      chiller_usage_pct: Number(event.chiller_usage_pct),
+      ahu_usage_pct: Number(event.ahu_usage_pct),
+      total_energy_cost_usd: Number(event.total_energy_cost_usd),
+      temperature_deviation_c: Number(event.temperature_deviation_c),
+      is_outlier: event.is_outlier === true || event.is_outlier === "true",
+    };
+  }
+
+  function restoreBundledAnalytics() {
+    if (!Array.isArray(window.COOLING_BUNDLED_EVENTS)) return false;
+    analyticsEvents = window.COOLING_BUNDLED_EVENTS.map(eventFromBackend).filter(Boolean);
+    analyticsMode = "bundle";
+    return analyticsEvents.length > 0;
+  }
+
+  function buildEmptyDashboard(sourceName, format) {
+    const nextDashboard = deepClone(bundledDashboard);
+    nextDashboard.meta = {
+      ...nextDashboard.meta,
+      source_file: sourceName,
+      source_rows: 0,
+      source_range: "No events in selected range",
+      import_format: format,
+    };
+    nextDashboard.components.kpis.items = [
+      { id: "avg-inlet", label: "Average inlet temperature", value: 0, unit: "°C", note: "No readings in this time range", tone: "neutral", color: "#38bdf8" },
+      { id: "avg-power", label: "Average cooling power", value: 0, unit: "kW", note: "No readings in this time range", tone: "neutral", color: "#a78bfa" },
+      { id: "outliers", label: "Flagged outliers", value: 0, unit: "events", note: "No readings in this time range", tone: "neutral", color: "#fbbf24" },
+      { id: "total-cost", label: "Recorded energy cost", value: 0, unit: "USD", note: "No readings in this time range", tone: "neutral", color: "#34d399" },
+    ];
+    nextDashboard.components.temperature_trend = { labels: [], inlet_c: [], outlet_c: [], inlet_watch_c: 27 };
+    nextDashboard.components.strategy_performance.items = [];
+    nextDashboard.components.alerts.items = [];
+    nextDashboard.components.recent_events.items = [];
+    return nextDashboard;
+  }
+
   function buildDashboardFromEvents(inputEvents, fileName, format) {
     const events = [...inputEvents].sort((left, right) => left.sort_ms - right.sort_ms || left.source_index - right.source_index);
     const eventCount = events.length;
@@ -450,7 +533,7 @@
         label: "Flagged outliers",
         value: outlierCount,
         unit: "events",
-        note: `${((outlierCount / eventCount) * 100).toFixed(2)}% of the imported CSV`,
+        note: `${((outlierCount / eventCount) * 100).toFixed(2)}% of selected events`,
         tone: outlierCount ? "warning" : "safe",
         color: "#fbbf24",
       },
@@ -459,7 +542,7 @@
         label: "Recorded energy cost",
         value: round(events.reduce((total, event) => total + event.total_energy_cost_usd, 0), 2),
         unit: "USD",
-        note: `Sum across ${eventCount.toLocaleString()} imported observations`,
+        note: `Sum across ${eventCount.toLocaleString()} selected observations`,
         tone: "info",
         color: "#34d399",
       },
@@ -546,8 +629,9 @@
     byId("snapshotRange").textContent = dashboard.meta.source_range;
     byId("sourceRows").textContent = `${dashboard.meta.source_rows.toLocaleString()} events`;
     const pill = byId("sourceModePill");
-    pill.textContent = currentImport ? "CSV import" : "Bundled sample";
-    pill.className = `status-pill ${currentImport ? "status-imported" : "status-snapshot"}`;
+    const isBackend = analyticsMode === "backend";
+    pill.textContent = currentImport ? "CSV import" : isBackend ? "PostgreSQL live" : "Bundled sample";
+    pill.className = `status-pill ${currentImport || isBackend ? "status-imported" : "status-snapshot"}`;
   }
 
   function renderKpis() {
@@ -613,17 +697,9 @@
 
   function renderRecentEvents() {
     const body = byId("recentEventsBody");
-    const events = streamState.events.slice(-8).reverse().map((event) => ({
-      timestamp: formatCompactTime(Date.parse(event.timestamp)),
-      server_workload_pct: event.server_workload_pct,
-      inlet_temperature_c: event.inlet_temperature_c,
-      outlet_temperature_c: event.outlet_temperature_c,
-      cooling_power_kw: event.cooling_power_kw,
-      cooling_strategy_action: event.cooling_strategy_action,
-      is_outlier: event.is_outlier,
-    }));
-    const bufferedCount = streamState.events.length;
-    byId("recentEventsMeta").textContent = `${bufferedCount.toLocaleString()} buffered ${bufferedCount === 1 ? "event" : "events"}`;
+    const events = dashboard.components.recent_events.items;
+    const selectedCount = dashboard.meta.source_rows;
+    byId("recentEventsMeta").textContent = `${selectedCount.toLocaleString()} selected ${selectedCount === 1 ? "event" : "events"}`;
     body.replaceChildren();
     if (!events.length) {
       const row = document.createElement("tr");
@@ -1041,7 +1117,13 @@
     if (event.is_outlier) streamState.outliers += 1;
     updateGeneratorStats();
     updateScenarioCoverage();
-    renderRecentEvents();
+    if (analyticsMode === "backend") {
+      const analyticsEvent = eventFromBackend(event, analyticsEvents.length);
+      if (analyticsEvent && !analyticsEvents.some((candidate) => candidate.event_id === analyticsEvent.event_id)) {
+        analyticsEvents.push(analyticsEvent);
+        scheduleAnalyticsRefresh();
+      }
+    }
   }
 
   function resetGenerator() {
@@ -1056,7 +1138,6 @@
     byId("statUp").textContent = "00:00:00";
     updateGeneratorStats();
     updateScenarioCoverage();
-    renderRecentEvents();
   }
 
   function initializeGenerator() {
@@ -1112,6 +1193,87 @@
     }
   }
 
+  function renderTimeFilterStatus() {
+    const status = byId("timeFilterStatus");
+    const range = selectedTimeRange();
+    if (range.error) {
+      status.textContent = range.error;
+      status.className = "time-filter-status error";
+      return;
+    }
+    if (analyticsEvents === null) {
+      status.textContent = "Connect the local bridge or load a CSV to filter individual events.";
+      status.className = "time-filter-status";
+      return;
+    }
+    const count = dashboard.meta.source_rows;
+    const rangeLabel = range.start === null && range.end === null ? "all available time" : dashboard.meta.source_range;
+    status.textContent = `${count.toLocaleString()} ${count === 1 ? "event" : "events"} included · ${rangeLabel}`;
+    status.className = "time-filter-status";
+  }
+
+  function renderAnalytics() {
+    renderMeta();
+    renderImportSource();
+    renderKpis();
+    renderAlerts();
+    renderStrategyTable();
+    renderRecentEvents();
+    initializeCharts();
+    renderTimeFilterStatus();
+  }
+
+  function refreshAnalyticsFromRange() {
+    if (analyticsEvents === null) {
+      renderTimeFilterStatus();
+      return;
+    }
+    const filtered = filterEventsByTime(analyticsEvents);
+    if (filtered.error) {
+      renderTimeFilterStatus();
+      return;
+    }
+    const sourceName = analyticsMode === "backend" ? "PostgreSQL cooling_events" : currentImport ? currentImport.name : "Bundled cooling event sample";
+    const format = analyticsMode === "backend" ? "PostgreSQL live event stream" : currentImport ? currentImport.format : "Bundled 19-column event sample";
+    dashboard = filtered.events.length
+      ? buildDashboardFromEvents(filtered.events, sourceName, format)
+      : buildEmptyDashboard(sourceName, format);
+    renderAnalytics();
+  }
+
+  function scheduleAnalyticsRefresh() {
+    if (analyticsRefreshTimer !== null) return;
+    analyticsRefreshTimer = window.setTimeout(() => {
+      analyticsRefreshTimer = null;
+      refreshAnalyticsFromRange();
+    }, 100);
+  }
+
+  async function loadBackendAnalytics() {
+    try {
+      const response = await window.fetch("http://127.0.0.1:8765/api/events/history", { cache: "no-store" });
+      if (!response.ok) throw new Error(`History request failed (${response.status})`);
+      const payload = await response.json();
+      if (!Array.isArray(payload.events)) throw new Error("History response was invalid");
+      analyticsEvents = payload.events.map(eventFromBackend).filter(Boolean);
+      analyticsMode = "backend";
+      currentImport = null;
+      refreshAnalyticsFromRange();
+    } catch (error) {
+      // The static bundled sample remains useful when PostgreSQL is not running.
+      renderTimeFilterStatus();
+    }
+  }
+
+  function initializeTimeFilter() {
+    ["rangeStart", "rangeEnd"].forEach((id) => ["input", "change"].forEach((type) => byId(id).addEventListener(type, refreshAnalyticsFromRange)));
+    byId("resetTimeRange").addEventListener("click", () => {
+      byId("rangeStart").value = "";
+      byId("rangeEnd").value = "";
+      refreshAnalyticsFromRange();
+    });
+  }
+
   window.COOLING_STREAM_TOOLS = {
     buildGeneratedCsv,
   };
@@ -1119,9 +1281,11 @@
   function renderImportSource() {
     byId("csvSourceName").textContent = currentImport
       ? `"${currentImport.name}" CSV is loaded`
+      : analyticsMode === "backend" ? "PostgreSQL event history is active"
       : "Bundled sample is active";
     byId("csvSourceMeta").textContent = currentImport
       ? `${currentImport.format} · ${currentImport.rows.toLocaleString()} events · session only`
+      : analyticsMode === "backend" ? `${analyticsEvents.length.toLocaleString()} events · live updates included`
       : `${bundledDashboard.meta.source_rows.toLocaleString()} events`;
     byId("csvLoadedActions").hidden = !currentImport;
   }
@@ -1133,14 +1297,9 @@
   }
 
   function renderDashboard() {
-    renderMeta();
     renderImportSource();
-    renderKpis();
-    renderAlerts();
-    renderStrategyTable();
-    renderRecentEvents();
     renderScenarioCards();
-    initializeCharts();
+    renderAnalytics();
     resetGenerator();
   }
 
@@ -1152,9 +1311,11 @@
       if (!file.name.toLowerCase().endsWith(".csv")) throw new Error("Choose a file ending in .csv.");
       if (file.size > MAX_FILE_BYTES) throw new Error("The CSV is larger than the 20 MB browser limit.");
       const prepared = prepareCsvImport(await file.text(), file.name);
-      dashboard = prepared.dashboard;
       currentImport = { name: file.name, format: prepared.format, rows: prepared.events.length };
+      analyticsEvents = prepared.events;
+      analyticsMode = "import";
       renderDashboard();
+      refreshAnalyticsFromRange();
       setImportMessage(`Loaded ${prepared.events.length.toLocaleString()} rows. Every dashboard view now uses ${file.name}.`, "success");
     } catch (error) {
       setImportMessage(`Import failed: ${error.message} The current dashboard was not changed.`, "error");
@@ -1194,7 +1355,9 @@
     byId("resetCsvButton").addEventListener("click", () => {
       dashboard = deepClone(bundledDashboard);
       currentImport = null;
+      restoreBundledAnalytics();
       renderDashboard();
+      loadBackendAnalytics();
       setImportMessage("Imported CSV removed. Bundled sample restored.", "success");
     });
 
@@ -1205,5 +1368,8 @@
   initializeSchemaCopy();
   initializeGenerator();
   initializeCsvImport();
+  initializeTimeFilter();
+  restoreBundledAnalytics();
   renderDashboard();
+  loadBackendAnalytics();
 })();

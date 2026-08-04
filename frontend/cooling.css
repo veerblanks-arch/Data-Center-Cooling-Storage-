@@ -74,6 +74,69 @@ select {
   white-space: nowrap;
 }
 
+/* Shared Analytics time range. The controls intentionally sit above every
+ * summary card so the scope of the numbers is explicit. */
+.time-filter-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px 24px;
+  margin-bottom: 14px;
+}
+
+.time-filter-panel .card-sub {
+  margin-bottom: 0;
+}
+
+.time-filter-controls {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.time-filter-field {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.45px;
+  text-transform: uppercase;
+}
+
+.time-filter-field input {
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #080b10;
+  color: var(--text);
+  color-scheme: dark;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.time-filter-field input:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid rgba(56, 189, 248, 0.22);
+  outline-offset: 1px;
+}
+
+.time-filter-status {
+  grid-column: 1 / -1;
+  min-height: 14px;
+  margin: -3px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.time-filter-status.error {
+  color: var(--critical);
+}
+
 /* Browser-only CSV import */
 .import-panel {
   display: grid;
@@ -689,6 +752,10 @@ select {
   }
 
   .import-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .time-filter-panel {
     grid-template-columns: 1fr;
   }
 
