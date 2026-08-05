@@ -35,6 +35,9 @@
     "is_outlier",
     "event_id",
   ];
+  // `run_id` is added by the reproducible training-run export. It is
+  // provenance, not a measurement, so aggregation safely ignores it.
+  const OPTIONAL_EXPORT_HEADERS = ["run_id"];
   const ACTION_CODES = {
     "Increase Chiller": 0,
     "Reduce AHU": 1,
@@ -195,12 +198,19 @@
     }
 
     const expected = presentMetadata.length ? [...BASE_HEADERS, ...METADATA_HEADERS] : BASE_HEADERS;
-    const unexpected = headers.filter((header) => !expected.includes(header));
+    const allowed = [...expected, ...OPTIONAL_EXPORT_HEADERS];
+    const unexpected = headers.filter((header) => !allowed.includes(header));
     if (unexpected.length) throw new Error(`Unsupported columns: ${unexpected.join(", ")}.`);
-    if (headers.length !== expected.length) {
-      throw new Error(`Expected ${expected.length} unique columns; found ${headers.length}.`);
+    const optionalPresent = OPTIONAL_EXPORT_HEADERS.filter((header) => headers.includes(header));
+    if (headers.length !== expected.length + optionalPresent.length) {
+      throw new Error(`Expected ${expected.length} required columns plus optional provenance columns; found ${headers.length}.`);
     }
-    return presentMetadata.length ? "19-column PostgreSQL export" : "12-column source dataset";
+    if (!presentMetadata.length && optionalPresent.length) {
+      throw new Error("run_id requires the complete PostgreSQL event metadata columns.");
+    }
+    return presentMetadata.length
+      ? `PostgreSQL event export${optionalPresent.length ? " with run_id" : ""}`
+      : "12-column source dataset";
   }
 
   function readNumber(record, header, rowNumber) {
@@ -241,7 +251,7 @@
   }
 
   function recordsToEvents(records, format) {
-    const hasMetadata = format.startsWith("19-column");
+    const hasMetadata = format.startsWith("PostgreSQL");
     return records.map((record, index) => {
       const rowNumber = index + 2;
       const timestamp = parseTimestamp(record.Timestamp, rowNumber);
@@ -506,7 +516,7 @@
       source_file: fileName,
       source_rows: eventCount,
       source_range: formatRange(events),
-      event_schema: format.startsWith("19-column") ? "1.1" : "derived legacy",
+      event_schema: format.startsWith("PostgreSQL") ? "1.1" : "derived legacy",
       import_format: format,
     };
     nextDashboard.components.kpis.items = [
