@@ -57,7 +57,7 @@ Start the bridge in a third terminal:
 python3 backend/cooling_dashboard_bridge.py
 ```
 
-Open `http://127.0.0.1:8765/domain-cooling.html`. The raw event stream will populate only after the subscriber writes events to PostgreSQL. The dashboard can also import either `db/sample_data/cooling_events_export.csv` or `docs/datasets/cold_source_control_dataset.csv` locally in the browser.
+Open `http://127.0.0.1:8765/domain-cooling.html`. The raw event stream will populate only after the subscriber writes events to PostgreSQL. The dashboard can also import `db/sample_data/cooling_events_export.csv`, `docs/datasets/cold_source_control_dataset.csv`, or the training-run export `ai_worker/data/confirmed_training_run.csv` locally in the browser. The training export's additional `run_id` provenance column is accepted but does not affect dashboard calculations.
 
 The Analytics page has an optional **From / To** time filter. It recalculates the KPIs, thermal trend, risk queue, strategy chart/table, and recent-events table from the same selected events. With the bridge running, Analytics first loads the persisted `cooling_events` history and adds new streamed PostgreSQL events as they arrive. Leave both fields empty to include all available events.
 
